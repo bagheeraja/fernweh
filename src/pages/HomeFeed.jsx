@@ -8,7 +8,7 @@ export default function HomeFeed() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('created_at'); // 'created_at' or 'upvotes'
 
-  // Fetch posts from Supabase when the component mounts
+  // Fetch posts from Supabase when component mounts
   useEffect(() => {
     const fetchPosts = async () => {
       setLoading(true);
@@ -29,19 +29,24 @@ export default function HomeFeed() {
 
   // 1. Filter posts by search term (case-insensitive title matching)
   const filteredPosts = posts.filter((post) =>
-    post.title.toLowerCase().includes(searchTerm.toLowerCase())
+    post.title ? post.title.toLowerCase().includes(searchTerm.toLowerCase()) : false
   );
 
-  // 2. Sort the filtered posts based on user selection
+  // 2. Robust sorting calculation
   const sortedPosts = [...filteredPosts].sort((a, b) => {
     if (sortBy === 'upvotes') {
-      return (b.upvotes || 0) - (a.upvotes || 0); // Highest upvotes first
+      const upvotesA = Number(a.upvotes) || 0;
+      const upvotesB = Number(b.upvotes) || 0;
+      return upvotesB - upvotesA; // Highest upvotes first
     }
+
     // Default: Newest first (created_at)
-    return new Date(b.created_at) - new Date(a.created_at);
+    const timeA = new Date(a.created_at).getTime() || 0;
+    const timeB = new Date(b.created_at).getTime() || 0;
+    return timeB - timeA; // Most recent timestamp first
   });
 
-  if (loading) return <p className="loading-state">Loading Fernweh posts...</p>;
+  if (loading) return <p className="loading-state">Loading posts...</p>;
 
   return (
     <div className="home-feed-container">
@@ -58,12 +63,14 @@ export default function HomeFeed() {
         <div className="sort-controls">
           <span>Sort by: </span>
           <button
+            type="button"
             className={`sort-btn ${sortBy === 'created_at' ? 'active' : ''}`}
             onClick={() => setSortBy('created_at')}
           >
             Newest
           </button>
           <button
+            type="button"
             className={`sort-btn ${sortBy === 'upvotes' ? 'active' : ''}`}
             onClick={() => setSortBy('upvotes')}
           >
@@ -72,27 +79,32 @@ export default function HomeFeed() {
         </div>
       </div>
 
-      {/* Posts List */}
+      {/* Posts Grid */}
       {sortedPosts.length === 0 ? (
         <p className="no-posts">No matching posts found.</p>
       ) : (
         <div className="posts-grid">
           {sortedPosts.map((post) => (
             <div key={post.id} className="post-card">
-              <span className="post-time">
-                Posted {new Date(post.created_at).toLocaleDateString()}
-              </span>
-              
-              <Link to={`/post/${post.id}`} className="post-title-link">
-                <h2>{post.title}</h2>
-              </Link>
+              <div>
+                <span className="post-time">
+                  Posted {post.created_at ? new Date(post.created_at).toLocaleDateString() : 'recently'}
+                </span>
+                
+                {/* PUBLIC VIEW LINK: Routes all users to PostDetail (/post/:id) */}
+                <Link to={`/post/${post.id}`} className="post-title-link">
+                  <h2>{post.title}</h2>
+                </Link>
+              </div>
 
               <div className="post-card-footer">
                 <span className="upvotes-badge">
                   👍 {post.upvotes || 0} Upvotes
                 </span>
+                
+                {/* PUBLIC VIEW LINK: Directs to public post view & comments */}
                 <Link to={`/post/${post.id}`} className="read-more-btn">
-                  View Details →
+                  View Details & Comments →
                 </Link>
               </div>
             </div>

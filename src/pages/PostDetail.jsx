@@ -1,208 +1,229 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient'; // Adjust path if your client file is named client.js
 
-export default function EditPost() {
+export default function PostDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // Form State
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [secretKey, setSecretKey] = useState('');
-  
-  // Stored key for validation (if applicable)
-  const [storedSecretKey, setStoredSecretKey] = useState(null);
-  const [enteredSecretKey, setEnteredSecretKey] = useState('');
+  // Post & Comments State
+  const [post, setPost] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState('');
 
   // UI State
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [upvoting, setUpvoting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  // Fetch initial post data on mount
+  // 1. Fetch Post Details & Comments on Mount
   useEffect(() => {
-    const fetchPost = async () => {
+    const fetchPostAndComments = async () => {
       setLoading(true);
-      const { data, error } = await supabase
+
+      // Fetch single post
+      const { data: postData, error: postError } = await supabase
         .from('posts')
         .select('*')
         .eq('id', id)
         .single();
 
-      if (error) {
-        console.error('Error fetching post for edit:', error);
-        setErrorMessage('Post not found or could not be loaded.');
-      } else if (data) {
-        setTitle(data.title || '');
-        setContent(data.content || '');
-        setImageUrl(data.image_url || '');
-        setStoredSecretKey(data.secret_key || null);
+      if (postError) {
+        console.error('Error fetching post:', postError);
+        setErrorMsg('Post not found or could not be loaded.');
+      } else {
+        setPost(postData);
+
+        // Fetch associated comments ordered by newest first
+        const { data: commentsData, error: commentsError } = await supabase
+          .from('comments')
+          .select('*')
+          .eq('post_id', id)
+          .order('created_at', { ascending: false });
+
+        if (commentsError) {
+          console.error('Error fetching comments:', commentsError);
+        } else {
+          setComments(commentsData || []);
+        }
       }
+
       setLoading(false);
     };
 
-    fetchPost();
+    fetchPostAndComments();
   }, [id]);
 
-  // Helper check for secret key authorization
-  const isAuthorized = () => {
-    if (!storedSecretKey) return true; // No key required if post has none
-    return enteredSecretKey === storedSecretKey;
+  // 2. Increment Upvotes
+  const handleUpvote = async () => {
+    if (!post || upvoting) return;
+
+    setUpvoting(true);
+    const newCount = (post.upvotes || 0) + 1;
+
+    // Optimistic UI update
+    setPost((prev) => ({ ...prev, upvotes: newCount }));
+
+    const { error } = await supabase
+      .from('posts')
+      .update({ upvotes: newCount })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error updating upvotes:', error);
+      // Rollback optimistic state if query fails
+      setPost((prev) => ({ ...prev, upvotes: prev.upvotes - 1 }));
+    }
+
+    setUpvoting(false);
   };
 
-  // 1. UPDATE POST
-  const handleUpdate = async (e) => {
+  // 3. Option A Author Verification (Secret Key Check for Editing Post)
+  const handleAuthorEdit = (e) => {
     e.preventDefault();
 
-    if (!title.trim()) {
-      setErrorMessage('Title cannot be empty.');
-      return;
-    }
+    if (post.secret_key) {
+      const enteredKey = prompt('Author Verification Required:\nPlease enter the Secret Key for this post to edit or delete it:');
 
-    if (!isAuthorized()) {
-      setErrorMessage('Incorrect secret key. You are not authorized to edit this post.');
-      return;
-    }
+      if (enteredKey === null) return; // User canceled prompt
 
-    setSaving(true);
-    setErrorMessage('');
-
-    const { error } = await supabase
-      .from('posts')
-      .update({
-        title: title.trim(),
-        content: content.trim() || null,
-        image_url: imageUrl.trim() || null,
-      })
-      .eq('id', id);
-
-    setSaving(false);
-
-    if (error) {
-      console.error('Error updating post:', error);
-      setErrorMessage('Failed to update post. Please try again.');
+      if (enteredKey.trim() === post.secret_key.trim()) {
+        navigate(`/edit/${post.id}`);
+      } else {
+        alert('Incorrect Secret Key. Only the author of this post can edit or delete it.');
+      }
     } else {
-      // Redirect back to the post detail page
-      navigate(`/post/${id}`);
+      // Fallback if post has no secret key set
+      navigate(`/edit/${post.id}`);
     }
   };
 
-  // 2. DELETE POST
-  const handleDelete = async () => {
-    if (!isAuthorized()) {
-      setErrorMessage('Incorrect secret key. You are not authorized to delete this post.');
-      return;
-    }
+  // 4. Add a New Comment (Matches 'content' column name in Supabase)
+  const handleAddComment = async (e) => {
+    e.preventDefault();
 
-    const confirmDelete = window.confirm(
-      'Are you sure you want to delete this post? This action cannot be undone.'
-    );
+    if (!newComment.trim()) return;
 
-    if (!confirmDelete) return;
+    setSubmittingComment(true);
 
-    setSaving(true);
+    const { data, error } = await supabase
+      .from('comments')
+      .insert([
+        {
+          post_id: id,
+          content: newComment.trim() // Changed from 'text' to 'content'
+        }
+      ])
+      .select();
 
-    const { error } = await supabase
-      .from('posts')
-      .delete()
-      .eq('id', id);
-
-    setSaving(false);
+    setSubmittingComment(false);
 
     if (error) {
-      console.error('Error deleting post:', error);
-      setErrorMessage('Failed to delete post. Please try again.');
-    } else {
-      // Redirect back to home feed after successful deletion
-      navigate('/');
+      console.error('Error adding comment:', error);
+      alert('Could not submit comment. Please try again.');
+    } else if (data && data.length > 0) {
+      setComments([data[0], ...comments]);
+      setNewComment('');
     }
   };
 
   if (loading) return <p className="loading-state">Loading post details...</p>;
+  if (errorMsg || !post) return <div className="error-banner">{errorMsg || 'Post not found.'}</div>;
 
   return (
-    <div className="edit-post-container">
-      <h2>Edit Experience</h2>
+    <div className="post-detail-container">
+      {/* Header Navigation */}
+      <div className="post-detail-header">
+        <Link to="/" className="back-link">← Back to Home Feed</Link>
 
-      {errorMessage && <div className="error-banner">{errorMessage}</div>}
+        {/* Option A: Secret Key Edit Button */}
+        <button
+          type="button"
+          onClick={handleAuthorEdit}
+          className="edit-link-btn"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit' }}
+        >
+          ✏️ Edit Post (Author Only)
+        </button>
+      </div>
 
-      <form onSubmit={handleUpdate} className="edit-post-form">
-        {/* Secret Key Input (Only rendered if post was created with a secret key) */}
-        {storedSecretKey && (
-          <div className="form-group key-prompt">
-            <label htmlFor="enteredSecretKey">Secret Key / Password *</label>
-            <input
-              id="enteredSecretKey"
-              type="password"
-              placeholder="Enter the secret key used when creating this post"
-              value={enteredSecretKey}
-              onChange={(e) => setEnteredSecretKey(e.target.value)}
-              required
+      {/* Main Post Content */}
+      <article className="post-detail-card">
+        <div className="post-meta">
+          <span>Posted on {new Date(post.created_at).toLocaleString()}</span>
+        </div>
+
+        <h1 className="post-title">{post.title}</h1>
+
+        {post.image_url && (
+          <div className="post-image-wrapper">
+            <img
+              src={post.image_url}
+              alt={post.title}
+              className="post-image"
+              onError={(e) => {
+                e.target.style.display = 'none'; // Hide broken image links
+              }}
             />
           </div>
         )}
 
-        {/* Title Input */}
-        <div className="form-group">
-          <label htmlFor="title">Title *</label>
-          <input
-            id="title"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+        {post.content && (
+          <div className="post-content">
+            <p>{post.content}</p>
+          </div>
+        )}
+
+        {/* Upvote Interactive Counter */}
+        <div className="upvote-section">
+          <button
+            onClick={handleUpvote}
+            disabled={upvoting}
+            className="upvote-button"
+          >
+            👍 Upvote ({post.upvotes || 0})
+          </button>
+        </div>
+      </article>
+
+      <hr className="divider" />
+
+      {/* Visitor Comment Chain */}
+      <section className="comments-section">
+        <h3>Community Comments ({comments.length})</h3>
+
+        {/* New Comment Form */}
+        <form onSubmit={handleAddComment} className="comment-form">
+          <textarea
+            rows="3"
+            placeholder="Leave a comment or share your experience..."
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
             required
           />
-        </div>
-
-        {/* Content Input */}
-        <div className="form-group">
-          <label htmlFor="content">Content / Description</label>
-          <textarea
-            id="content"
-            rows="5"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-          />
-        </div>
-
-        {/* Image URL Input */}
-        <div className="form-group">
-          <label htmlFor="imageUrl">Image URL</label>
-          <input
-            id="imageUrl"
-            type="url"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-          />
-        </div>
-
-        {/* Action Controls */}
-        <div className="form-actions-split">
-          <button
-            type="button"
-            className="delete-btn"
-            onClick={handleDelete}
-            disabled={saving}
-          >
-            Delete Post
+          <button type="submit" className="submit-comment-btn" disabled={submittingComment}>
+            {submittingComment ? 'Posting...' : 'Post Comment'}
           </button>
+        </form>
 
-          <div className="form-actions-right">
-            <button
-              type="button"
-              className="cancel-btn"
-              onClick={() => navigate(`/post/${id}`)}
-            >
-              Cancel
-            </button>
-            <button type="submit" className="submit-btn" disabled={saving}>
-              {saving ? 'Saving...' : 'Update Post'}
-            </button>
-          </div>
+        {/* Comments List */}
+        <div className="comments-list">
+          {comments.length === 0 ? (
+            <p className="no-comments">No comments yet. Be the first to start the discussion!</p>
+          ) : (
+            comments.map((comment) => (
+              <div key={comment.id} className="comment-card">
+                {/* Renders 'content' column from Supabase */}
+                <p className="comment-text">{comment.content}</p>
+                <small className="comment-date">
+                  {new Date(comment.created_at).toLocaleString()}
+                </small>
+              </div>
+            ))
+          )}
         </div>
-      </form>
+      </section>
     </div>
   );
 }

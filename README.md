@@ -1,10 +1,10 @@
-# Web Development Final Project - *Name of App Here*
+# Web Development Final Project - *Fernweh*
 
-Submitted by: **Your Name Here**
+Submitted by: **Jason Ames**
 
-This web app: **insert description**
+Description: **iFull-stack web forum built with React, Vite, and Supabase for slow-travel enthusiasts to share hidden gems, quiet trails, and secondary towns. Supports title search, sorting by upvotes/date, post editing, and comments.**
 
-Time spent: **X** hours spent in total
+Time spent: **6** hours spent in total
 
 ## Required Features
 

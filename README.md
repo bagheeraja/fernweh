@@ -2,7 +2,7 @@
 
 Submitted by: **Jason Ames**
 
-Description: **iFull-stack web forum built with React, Vite, and Supabase for slow-travel enthusiasts to share hidden gems, quiet trails, and secondary towns. Supports title search, sorting by upvotes/date, post editing, and comments.**
+Description: **Full-stack web forum built with React, Vite, and Supabase for slow-travel enthusiasts to share hidden gems, quiet trails, and secondary towns. Supports title search, sorting by upvotes/date, post editing, and comments.**
 
 Time spent: **6** hours spent in total
 
@@ -63,7 +63,10 @@ The following **optional** features are implemented:
 
 The following **additional** features are implemented:
 
-* [ ] List anything else that you added to improve the site's functionality!
+- **Custom Color Palette:** Custom-styled UI utilizing a serene sage and mint color palette.
+- **Optimistic UI Updates:** Upvote counter updates instantly in the UI before syncing with Supabase for a responsive user experience.
+- **Image Fallback Handling:** Automatic error handling for broken or invalid image URLs.
+- **Starter Data:** Pre-seeded SQL scripts provided for easy database initialization.
 
 ## Video Walkthrough
 
@@ -80,7 +83,8 @@ GIF created with ...
 
 ## Notes
 
-Describe any challenges encountered while building the app.
+* **Schema Mapping:** Transitioning comment payload field names to match existing database column naming conventions (`content` vs `text`).
+* **State Synchronization:** Handling state updates after mutations (like comments or upvotes) to ensure components display updated data without hard page reloads.
 
 ## License
 
